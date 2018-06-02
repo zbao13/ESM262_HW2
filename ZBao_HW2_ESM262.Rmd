@@ -1,122 +1,96 @@
-#Zhiping BaO
-#ESM 262
-#HW 2
-#Data Cleaninng
+---
+title: "ZBao_HW2"
+author: "Zhiping Bao"
+date: "6/1/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+Data Import
+```{r}
 library(tidyverse)
-?read.delim
-#read.delim(file, header = TRUE, sep = "\t", quote = "\"",
-#dec = ".", fill = TRUE, comment.char = "", ...)
-
-gaz_raw <- read.delim("CA_Features.txt", header = TRUE, sep = "|")
-
-?tibble
-library(tibble)
-gaz <- as_tibble(gaz_raw)
-gaz_simp <- gaz[,c(1,2,3,4,6,10,11,14,15,16,19,20)]
-is.na(gaz_simp) <- gaz_simp==''
-CA_gaz <- gaz_simp[which(gaz_simp$STATE_ALPHA=='CA'),]
-CA_complete_gaz <- CA_gaz[!CA_gaz$PRIM_LAT_DEC=='NA'& !CA_gaz$PRIM_LONG_DEC=='NA',]
-
+gaz_raw <- read_delim(
+    "CA_Features.txt",
+    delim = "|",
+    col_types = cols(.default = col_character())
+  )
+gaz <-
+  select(gaz_raw,
+    id         = FEATURE_ID,
+    name       = FEATURE_NAME,
+    class      = FEATURE_CLASS,
+    state      = STATE_ALPHA,
+    county     = COUNTY_NAME,
+    lat        = PRIM_LAT_DEC,
+    lon        = PRIM_LONG_DEC,
+    src_lat    = SOURCE_LAT_DEC,
+    src_lon    = SOURCE_LONG_DEC,
+    elev       = ELEV_IN_M,
+    map        = MAP_NAME,
+    created_on = DATE_CREATED,
+    edited_on  = DATE_EDITED
+  )
+gaz
+```
+Data Cleaning
+```{r}
+gaz$id         = parse_integer(gaz$id)
+gaz$lat        = parse_double(gaz$lat, na = "0")
+gaz$lon        = parse_double(gaz$lon, na = "0")
+gaz$src_lat    = parse_double(gaz$src_lat)
+gaz$src_lon    = parse_double(gaz$src_lon)
+gaz$elev       = parse_integer(gaz$elev)
+gaz$map        = parse_character(gaz$map, na = "Unknown")
+gaz$created_on = parse_date(gaz$created_on, format = "%m/%d/%Y")
+gaz$edited_on  = parse_date(gaz$edited_on, format = "%m/%d/%Y")
+gaz
+CA_complete_gaz <-
+  filter(gaz,
+    !is.na(lon) &
+    !is.na(lat) &
+    state == "CA"
+  )
+gaz
+```
+Question 1
+```{r}
 library(dplyr)
 library(DBI)
 library(RSQLite)
-
 gaz_df <-as.data.frame(CA_complete_gaz)
 conn <- DBI::dbConnect(RSQLite::SQLite(), path= ":memory:")
 copy_to(conn, gaz_df, "gaz",
         temporary = FALSE)
-
-#Q1 What is the most-frequently-occuring feature name?
-dbGetQuery(conn, "SELECT (`FEATURE_NAME`), COUNT(`FEATURE_NAME`) AS count FROM gaz GROUP BY(`FEATURE_NAME`) ORDER BY count DESC LIMIT 5;")
-
-#                                      FEATURE_NAME count
-#1                                 Church of Christ   228
-#2                             First Baptist Church   169
-#3  The Church of Jesus Christ of Latter Day Saints   136
-#4               Kingdom Hall of Jehovahs Witnesses   133
-#5                 First Church of Christ Scientist   123
-
-#Q2 What is the least-frequently-occuring feature class?
-dbGetQuery(conn, "SELECT (`FEATURE_CLASS`), COUNT(`FEATURE_CLASS`) AS count FROM gaz GROUP BY(`FEATURE_CLASS`) ORDER BY count LIMIT 5;")
-
-#FEATURE_CLASS count
-#1       Isthmus     1
-#2           Sea     1
-#3        Arroyo     2
-#4        Rapids    10
-#5          Lava    16
-
-#Q3 What is the approximate center point of each county?
-dbGetQuery(conn, "SELECT COUNTY_NAME,AVG(PRIM_LAT_DEC) AS lat_avg, AVG(PRIM_LONG_DEC) AS long_avg FROM gaz WHERE COUNTY_NAME IS NOT NULL GROUP BY COUNTY_NAME;")
-
-#COUNTY_NAME  lat_avg  long_avg
-#1          Alameda 37.72641 -122.1108
-#2           Alpine 38.46465 -119.4155
-#3           Amador 38.24350 -120.0896
-#4            Butte 39.20366 -120.1489
-#5        Calaveras 38.02912 -120.0978
-#6           Colusa 39.04933 -121.8448
-#7     Contra Costa 37.92377 -122.0018
-#8        Del Norte 41.50418 -123.2159
-#9        El Dorado 38.30023 -119.0416
-#10          Fresno 36.63115 -118.8700
-#11           Glenn 39.55104 -122.2146
-#12        Humboldt 40.48476 -123.3152
-#13        Imperial 32.88554 -115.3010
-#14            Inyo 36.61158 -117.5558
-#15            Kern 35.36715 -118.7343
-#16           Kings 36.16381 -119.7920
-#17            Lake 38.04076 -119.5217
-#18          Lassen 40.60123 -120.4653
-#19     Los Angeles 33.95313 -117.7593
-#20          Madera 36.37190 -116.7716
-#21           Marin 37.83550 -122.1396
-#22        Mariposa 37.32609 -118.9436
-#23       Mendocino 39.23421 -122.9063
-#24          Merced 37.22837 -120.6950
-#25           Modoc 41.33246 -120.0731
-#26            Mono 37.89973 -118.8492
-#27        Monterey 35.81198 -119.6145
-#28            Napa 38.08476 -121.1485
-#29          Nevada 39.20459 -120.4911
-#30          Orange 33.58068 -117.3310
-#31          Placer 38.87233 -120.1922
-#32          Plumas 39.69230 -120.0633
-#33       Riverside 33.62548 -116.2180
-#34      Sacramento 38.37442 -120.8456
-#35      San Benito 36.13041 -119.5199
-#36  San Bernardino 34.27944 -116.4048
-#37       San Diego 32.62458 -115.9804
-#38   San Francisco 37.76651 -122.4404
-#39     San Joaquin 37.94056 -121.2930
-#40 San Luis Obispo 35.31239 -120.4028
-#41       San Mateo 37.44854 -122.1413
-#42   Santa Barbara 32.02344 -111.0647
-#43     Santa Clara 37.29720 -121.8908
-#44      Santa Cruz 35.56790 -117.2150
-#45          Shasta 40.62516 -121.7631
-#46          Sierra 39.52475 -120.5424
-#47        Siskiyou 41.42510 -122.1756
-#48          Solano 38.12828 -121.7599
-#49          Sonoma 37.57025 -119.9412
-#50      Stanislaus 37.59442 -120.9692
-#51          Sutter 38.07167 -118.5862
-#52          Tehama 40.01780 -121.9367
-#53         Trinity 40.58469 -122.8708
-#54          Tulare 36.04082 -118.1389
-#55        Tuolumne 37.79588 -119.3361
-#56         Ventura 32.99511 -114.3863
-#57            Yolo 38.65037 -121.8380
-#58            Yuba 39.16233 -120.9307
-
-#Q4 What are the fractions of the total number of features in each county that are natural? man-made?
-dbGetQuery(conn, "SELECT (`FEATURE_CLASS`), COUNT(`FEATURE_CLASS`) AS count FROM gaz GROUP BY(`FEATURE_CLASS`) ORDER BY count;") 
+dbGetQuery(conn, "SELECT (`name`), COUNT(`name`) AS count FROM gaz GROUP BY(`name`) ORDER BY count DESC LIMIT 5;")
+```
+Question 2
+```{r}
+dbGetQuery(conn, "SELECT (`class`), COUNT(`class`) AS count FROM gaz GROUP BY(`class`) ORDER BY count LIMIT 5;")
+```
+Question 3
+```{r}
+dbGetQuery(conn, "SELECT name,(MIN(lat)+MAX(lat))/2 AS lat_prox, (MIN(lon)+MAX(lon))/2 AS long_proxi FROM gaz WHERE county IS NOT NULL GROUP BY county;")
+```
+Question 4
+```{r}
+dbGetQuery(conn, "SELECT (`class`), COUNT(`class`) AS count FROM gaz GROUP BY(`class`) ORDER BY count;") 
 ?dbGetQuery
 dbGetQuery(conn, "ALTER TABLE gaz ADD COLUMN M_N")
-dbGetQuery(conn, "SELECT COUNTY_NAME, CASE WHEN FEATURE_CLASS IN ('Airport', 'Bridge', 'Building','Canal','Cemetery','Census','Church','Civil','Crossing','Dam','Harbor','Hospital','Levee','Locale','Military','Mine','Oilfield','Park','Populated Place','Post Office','Reservoir','School','Tower','Trail','Well') THEN 'manmade'ELSE 'natural'END AS M_N_category FROM gaz;")
-MN <- dbSendQuery(conn,"CREATE TABLE M_V_N AS SELECT COUNTY_NAME, CASE WHEN FEATURE_CLASS IN ('Airport', 'Bridge', 'Building','Canal','Cemetery','Census','Church','Civil','Crossing','Dam','Harbor','Hospital','Levee','Locale','Military','Mine','Oilfield','Park','Populated Place','Post Office','Reservoir','School','Tower','Trail','Well') THEN 'manmade'ELSE 'natural'END AS category FROM gaz")
-dbSendQuery(conn, "CREATE TABLE manmade_1 AS SELECT COUNTY_NAME, COUNT(category)  as manmade_count FROM M_V_N WHERE category = 'manmade' GROUP BY COUNTY_NAME")
-dbSendQuery(conn, "CREATE TABLE natural AS SELECT COUNTY_NAME, COUNT(category)  as natural_count FROM M_V_N WHERE category = 'natural' GROUP BY COUNTY_NAME")
-joinedresults <- dbSendQuery(conn,"CREATE TABLE total_3 AS SELECT * FROM manmade_1 INNER JOIN natural USING(COUNTY_NAME)")
+dbGetQuery(conn, "SELECT county, CASE WHEN class IN ('Airport', 'Bridge', 'Building','Canal','Cemetery','Census','Church','Civil','Crossing','Dam','Harbor','Hospital','Levee','Locale','Military','Mine','Oilfield','Park','Populated Place','Post Office','Reservoir','School','Tower','Trail','Well') THEN 'manmade'ELSE 'natural'END AS M_N_category FROM gaz;")
+MN <- dbSendQuery(conn,"CREATE TABLE M_V_N AS SELECT county, CASE WHEN class IN ('Airport', 'Bridge', 'Building','Canal','Cemetery','Census','Church','Civil','Crossing','Dam','Harbor','Hospital','Levee','Locale','Military','Mine','Oilfield','Park','Populated Place','Post Office','Reservoir','School','Tower','Trail','Well') THEN 'manmade'ELSE 'natural'END AS category FROM gaz")
+dbSendQuery(conn, "CREATE TABLE manmade_1 AS SELECT county, COUNT(category)  as manmade_count FROM M_V_N WHERE category = 'manmade' GROUP BY county")
+dbSendQuery(conn, "CREATE TABLE natural AS SELECT county, COUNT(category)  as natural_count FROM M_V_N WHERE category = 'natural' GROUP BY county")
+joinedresults <- dbSendQuery(conn,"CREATE TABLE total_3 AS SELECT * FROM manmade_1 INNER JOIN natural USING(county)")
 dbFetch(joinedresults)
-dbGetQuery(conn, "SELECT COUNTY_NAME, manmade_count, natural_count, manmade_count + natural_count AS total_count , CAST(natural_count AS REAL)/ CAST (natural_count + manmade_count AS REAL)AS natural_frac, CAST(manmade_count AS REAL)/ CAST (natural_count + manmade_count AS REAL)AS manmade_frac FROM total_3 GROUP BY COUNTY_NAME")
+dbGetQuery(conn, "SELECT county, manmade_count, natural_count, manmade_count + natural_count AS total_count , CAST(natural_count AS REAL)/ CAST (natural_count + manmade_count AS REAL)AS natural_frac, CAST(manmade_count AS REAL)/ CAST (natural_count + manmade_count AS REAL)AS manmade_frac FROM total_3 GROUP BY county")
+```
+
